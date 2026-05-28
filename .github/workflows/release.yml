@@ -34,8 +34,16 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Publish to npm (OIDC trusted publisher)
-        run: npm publish --provenance --access public
+      - name: Publish to npm (token)
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          npm publish --provenance --access public
+
+      - name: Skip npm publish (no NPM_TOKEN)
+        if: ${{ secrets.NPM_TOKEN == '' }}
+        run: |
+          echo "No NPM_TOKEN configured — skipping npm publish. To enable, add NPM_TOKEN secret or configure OIDC publishing."
 
       # Publish to GitHub Packages
       - name: Setup Node.js for GitHub Packages
