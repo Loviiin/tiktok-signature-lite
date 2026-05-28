@@ -6,13 +6,15 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8085:8080"
     environment:
       - PORT=8080
       - PROXY_ENABLED=${PROXY_ENABLED:-false}
       - PROXY_HOST=${PROXY_HOST:-}
       - PROXY_USER=${PROXY_USER:-}
       - PROXY_PASS=${PROXY_PASS:-}
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -24,7 +26,7 @@ services:
       resources:
         limits:
           cpus: "2"
-          memory: 2G
+          memory: 768M
         reservations:
           cpus: "0.5"
           memory: 512M

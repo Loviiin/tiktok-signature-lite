@@ -67,18 +67,8 @@ const SDK_485_PATH = path.join(
 );
 let sdk368 = null;
 let sdk485 = null;
-try {
-  if (fs.existsSync(SDK_368_PATH)) {
-    sdk368 = fs.readFileSync(SDK_368_PATH, "utf-8");
-    console.log("[Server] Loaded:", SDK_368_PATH);
-  }
-  if (fs.existsSync(SDK_485_PATH)) {
-    sdk485 = fs.readFileSync(SDK_485_PATH, "utf-8");
-    console.log("[Server] Loaded:", SDK_485_PATH);
-  }
-} catch (e) {
-  console.log("[Server] SDK load error:", e.message);
-}
+// Lazy-load the versioned SDK variants in the interception path to reduce
+// startup heap pressure.
 
 // Try to load local SDK
 try {
@@ -105,8 +95,8 @@ const signedUrlCache = new Map();
 const SIGNED_CACHE_MAX_AGE_MS = 60_000;
 
 // Auto-refresh configuration to avoid blocks
-const MAX_GENERATIONS_BEFORE_REFRESH = 500; // Restart browser after this many signatures
-const MAX_SESSION_AGE_MS = 30 * 60 * 1000; // Restart browser after 30 minutes
+const MAX_GENERATIONS_BEFORE_REFRESH = 150; // Restart browser after this many signatures
+const MAX_SESSION_AGE_MS = 10 * 60 * 1000; // Restart browser after 10 minutes
 
 // Request queue for sequential processing (prevents concurrent access to browser page)
 const requestQueue = [];
@@ -211,7 +201,17 @@ async function initBrowser() {
       "--disable-dev-shm-usage",
       "--disable-blink-features=AutomationControlled",
       "--disable-gpu",
-      "--window-size=1920,1080",
+      "--window-size=1366,768",
+      "--renderer-process-limit=1",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-sync",
+      "--disable-translate",
+      "--metrics-recording-only",
+      "--no-first-run",
+      "--safebrowsing-disable-auto-update",
+      "--disable-component-update",
     ];
 
     // Add proxy if enabled
@@ -262,7 +262,7 @@ async function initBrowser() {
     }
 
     await page.setUserAgent(DEFAULT_UA);
-    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setViewport({ width: 1366, height: 768 });
 
     // Apply platform override to match Safari on macOS
     await page.evaluateOnNewDocument(() => {
@@ -371,9 +371,26 @@ async function initWithLocalSdk() {
 
     if (url.includes("/webmssdk/")) {
       let body = null;
-      if (url.includes("2.0.0.485") && sdk485) body = sdk485;
-      else if (url.includes("1.0.0.368") && sdk368) body = sdk368;
-      else if (sdk485) body = sdk485;
+      try {
+        if (url.includes("2.0.0.485")) {
+          if (!sdk485 && fs.existsSync(SDK_485_PATH)) {
+            sdk485 = fs.readFileSync(SDK_485_PATH, "utf-8");
+          }
+          body = sdk485;
+        } else if (url.includes("1.0.0.368")) {
+          if (!sdk368 && fs.existsSync(SDK_368_PATH)) {
+            sdk368 = fs.readFileSync(SDK_368_PATH, "utf-8");
+          }
+          body = sdk368;
+        } else {
+          if (!sdk485 && fs.existsSync(SDK_485_PATH)) {
+            sdk485 = fs.readFileSync(SDK_485_PATH, "utf-8");
+          }
+          body = sdk485;
+        }
+      } catch (e) {
+        console.log("[Server] Lazy SDK load error:", e.message);
+      }
       if (body) {
         try {
           await request.respond({
@@ -768,8 +785,8 @@ function normalizeUrlFingerprint(urlObj) {
   const fingerprint = {
     browser_platform: "MacIntel", // matches navigator.platform override
     os: "mac", // matches Safari macOS UA
-    screen_width: "1920", // matches viewport
-    screen_height: "1080", // matches viewport
+    screen_width: "1366", // matches viewport
+    screen_height: "768", // matches viewport
   };
 
   let normalized = false;
@@ -1087,8 +1104,8 @@ async function handleRequest(req, res) {
               platform: "MacIntel",
               browser_language: "en-US",
               os: "mac",
-              screen_width: "1920",
-              screen_height: "1080",
+              screen_width: "1366",
+              screen_height: "768",
             },
           },
         }),

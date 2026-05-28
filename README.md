@@ -12,7 +12,7 @@ Generate valid **X-Bogus** and **X-Gnarly** signatures for TikTok API requests. 
 - Uses TikTok's official SDK (injected locally for reliability)
 - Supports proxy configuration for IP rotation
 - Queue system handles concurrent requests safely
-- Auto-refreshes browser session (every 500 signatures or 30 minutes)
+- Auto-refreshes browser session (every 150 signatures or 10 minutes)
 - `/signature` endpoint for scalable external requests (recommended)
 - `/fetch` endpoint as fallback (browser-based, 100% reliable)
 - Docker support for easy deployment
@@ -86,8 +86,8 @@ curl -X POST http://localhost:8080/signature \
       "platform": "MacIntel",
       "browser_language": "en-US",
       "os": "mac",
-      "screen_width": "1920",
-      "screen_height": "1080"
+      "screen_width": "1366",
+      "screen_height": "768"
     }
   }
 }
@@ -99,7 +99,7 @@ curl -X POST http://localhost:8080/signature \
 
 Fetch data directly through the browser. This endpoint makes the actual API request through the browser session, bypassing TikTok's bot detection entirely.
 
-**Use this only as a fallback** when external requests with signed URLs fail. This endpoint is slower and less scalable because each request goes through the browser.
+**Use this only as a fallback** when external requests with signed URLs fail. This is the guaranteed fallback path when direct signed calls are blocked. This endpoint is slower and less scalable because each request goes through the browser.
 
 **Request:**
 
@@ -138,7 +138,7 @@ curl http://localhost:8080/health
   "initMethod": "local-sdk",
   "sessionAgeMinutes": 5,
   "generationCount": 150,
-  "maxGenerationsBeforeRefresh": 500,
+  "maxGenerationsBeforeRefresh": 150,
   "queueLength": 0,
   "proxyEnabled": false
 }
@@ -184,8 +184,8 @@ async function getTikTokPosts(secUid) {
     os: "mac",
     priority_region: "US",
     region: "US",
-    screen_height: "1080",
-    screen_width: "1920",
+    screen_height: "768",
+    screen_width: "1366",
     secUid: secUid,
     tz_name: "America/New_York",
     webcast_language: "en",
@@ -247,8 +247,8 @@ def get_tiktok_posts(sec_uid: str) -> dict:
         "os": "mac",
         "priority_region": "US",
         "region": "US",
-        "screen_height": "1080",
-        "screen_width": "1920",
+        "screen_height": "768",
+        "screen_width": "1366",
         "secUid": sec_uid,
         "tz_name": "America/New_York",
         "webcast_language": "en",
@@ -310,8 +310,8 @@ function getTikTokPosts(string $secUid): array
         'os' => 'mac',
         'priority_region' => 'US',
         'region' => 'US',
-        'screen_height' => '1080',
-        'screen_width' => '1920',
+        'screen_height' => '768',
+        'screen_width' => '1366',
         'secUid' => $secUid,
         'tz_name' => 'America/New_York',
         'webcast_language' => 'en',
@@ -407,17 +407,27 @@ services:
   tiktok-signature:
     build: .
     ports:
-      - "8080:8080"
+      - "8085:8080"
     environment:
       - PORT=8080
       - PROXY_ENABLED=false
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 768M
 ```
+
+For low-resource hosts, the container runtime is tuned for the sidecar profile used by Project-Argus: `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true`, `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`, and a `768M` service memory limit.
+
+When using Docker Compose, the sidecar is exposed on `http://localhost:8085` on the host.
 
 ### Commands
 
@@ -499,7 +509,7 @@ The server uses Puppeteer with a stealth plugin to maintain a persistent browser
 
 **Session management:**
 
-- Browser session auto-refreshes every 500 signatures or 30 minutes
+- Browser session auto-refreshes every 150 signatures or 10 minutes
 - Request queue ensures safe concurrent access to the browser
 - Session cookies are captured and returned with each signature
 
@@ -522,10 +532,12 @@ tiktok-signature/
 
 ### Use /signature Endpoint (Not /fetch)
 
-The `/signature` endpoint is designed for scalability:
+The `/signature` endpoint is the primary path for scalable requests:
 
 - Signature generation: ~80ms (handled by signature server)
 - HTTP requests to TikTok: handled by your application (can be parallelized)
+
+If direct signed calls fail, fall back to `/fetch`. That endpoint is the guaranteed browser-based escape hatch.
 
 ### Implement Rate Limiting
 
@@ -581,8 +593,8 @@ This error occurs when the browser fingerprint params in your URL don't match th
 | ------------------ | ------------- |
 | `browser_platform` | `MacIntel`    |
 | `os`               | `mac`         |
-| `screen_width`     | `1920`        |
-| `screen_height`    | `1080`        |
+| `screen_width`     | `1366`        |
+| `screen_height`    | `768`         |
 
 ### Signatures Not Working
 
