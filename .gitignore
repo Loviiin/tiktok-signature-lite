@@ -215,3 +215,6 @@ docker-compose.override.yml
 .claude/
 # Persistent Chrome user-data dir created by puppeteer at runtime
 .chrome-profile/
+
+# Ignore internal agent files
+.github/agents/
